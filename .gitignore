@@ -1,0 +1,8 @@
+# veri dosyaları depoya yüklenmez (katılımcı düzeyinde veri)
+*.csv
+*.zip
+çıktılar/veri/
+çıktılar/tablolar/
+çıktılar/şekiller/
+Hemodiyaliz*/
+__pycache__/
