@@ -213,7 +213,6 @@ defter = pd.DataFrame(satirlar)
 # ---------------------------------------------------------------
 # satırlar ilk hücredeki metinle bulunuyor
 
-belge = Document(tablo_klasoru / "Tablolar.docx")
 
 
 def satir_bul(tablo, baslangic, kacinci=0):
@@ -221,15 +220,16 @@ def satir_bul(tablo, baslangic, kacinci=0):
     return [c.text.strip() for c in bulunan[kacinci].cells]
 
 
-tablo1, tablo2, tablo3, tablo4 = belge.tables
+tablo2 = Document(tablo_klasoru / "Table2.docx").tables[0]
+tablo3 = Document(tablo_klasoru / "Table3.docx").tables[0]
 
 tablo_kontrolleri = [
-    ("Table 2, D5 doğru", satir_bul(tablo2, "D5.")[2], "53 (42.4)"),
-    ("Table 2, D6 doğru", satir_bul(tablo2, "D6.")[2], "56 (44.4)"),
-    ("Table 2, D3 p", satir_bul(tablo2, "D3.")[7], "0.001ᵃ"),
-    ("Table 2, bilgi skoru tümü", satir_bul(tablo2, "Knowledge score")[2], "7.05 ± 2.26"),
-    ("Table 2, bilgi skoru nefrolog", satir_bul(tablo2, "Knowledge score")[4], "7.70 ± 1.82"),
-    ("Table 2, bilgi skoru pratisyen", satir_bul(tablo2, "Knowledge score")[6], "6.00 ± 2.61"),
+    ("Table 2, D5 doğru", satir_bul(tablo2, "D5.")[1], "53 (42.4)"),
+    ("Table 2, D6 doğru", satir_bul(tablo2, "D6.")[1], "56 (44.4)"),
+    ("Table 2, D3 p", satir_bul(tablo2, "D3.")[6], "0.001ᵃ"),
+    ("Table 2, bilgi skoru tümü", satir_bul(tablo2, "Knowledge score")[1], "7.05 ± 2.26"),
+    ("Table 2, bilgi skoru nefrolog", satir_bul(tablo2, "Knowledge score")[3], "7.70 ± 1.82"),
+    ("Table 2, bilgi skoru pratisyen", satir_bul(tablo2, "Knowledge score")[5], "6.00 ± 2.61"),
     ("Table 3, model A pratisyen", " | ".join(satir_bul(tablo3, "General practitioner (ref. nephrologist)")[1:]),
      "−1.43 | −2.51 to −0.35 | 0.010"),
     ("Table 3, model A iç hast.", " | ".join(satir_bul(tablo3, "Internist (ref. nephrologist)")[1:]),

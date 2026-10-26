@@ -3,26 +3,25 @@
 #
 # bu dosya makaledeki dört tabloyu word dosyası olarak hazırlar
 # tablolar ingilizce, önceki makalelerimizdeki biçimde:
-#   Times New Roman, gövde 8 punto
-#   sadece üç yatay çizgi (en üst, başlık satırının altı, en alt), dikey çizgi yok
-#   başlık satırı kalın, bölüm satırları bütün sütunları kaplayan birleşik satır
-#   tablo adı tablonun üstünde, açıklamalar ve kısaltmalar altında
+#   Times New Roman, tablo içi 8 punto, A4 dikey sayfa
+#   Word'ün "Table Grid" stili, sadece üç yatay çizgi (en üst, başlık satırının altı, en alt)
+#   başlık satırı kalın, bölüm satırları birleşik ve kalın-italik, hücreler sola hizalı
+#   tablo adı tablonun üstünde kalın, açıklamalar ve kısaltmalar altında 8 punto
 #
 # sayılar kodlanmış veriden ve 02 ile 03'ün kaydettiği sonuçlardan okunuyor
 #
-# çıktı: çıktılar/tablolar/Tablolar.docx (her tablo ayrı sayfada)
+# çıktı: her tablo ayrı word dosyası, çıktılar/tablolar/Table1.docx ... Table4.docx
 
 import json
 from pathlib import Path
 
 import pandas as pd
 from docx import Document
-from docx.enum.section import WD_ORIENT, WD_SECTION
-from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.section import WD_ORIENT
+from docx.enum.text import WD_BREAK
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Cm, Pt
+from docx.shared import Cm, Pt, Twips
 
 kod_klasoru = Path(__file__).resolve().parent
 veri_klasoru = kod_klasoru.parent / "veri"
@@ -65,133 +64,124 @@ def eksi(metin):
 # ---------------------------------------------------------------
 # word tablosu için yardımcı fonksiyonlar
 # ---------------------------------------------------------------
+# tablo genişliği 9129 twip (yaklaşık 16,1 cm), önceki makaledeki tablolarla aynı
 
-def hucre_kenari(hucre, ust=None, alt=None):
-    # hücrenin üst ve alt çizgisini ayarlıyor
+TABLO_GENISLIGI = 9129
+
+
+def yeni_belge():
+    belge = Document()
+    normal = belge.styles["Normal"]
+    normal.font.name = FONT
+    normal.element.rPr.rFonts.set(qn("w:eastAsia"), FONT)
+    normal.font.size = Pt(12)
+    bolum = belge.sections[0]
+    bolum.orientation = WD_ORIENT.PORTRAIT
+    bolum.page_width, bolum.page_height = Cm(21.0), Cm(29.7)
+    for kenar in ["left_margin", "right_margin", "top_margin", "bottom_margin"]:
+        setattr(bolum, kenar, Cm(2.5))
+    return belge
+
+
+def cizgi(ust_eleman, yon, deger="single", kalinlik=8):
+    eleman = OxmlElement(f"w:{yon}")
+    eleman.set(qn("w:val"), deger)
+    if deger != "nil":
+        eleman.set(qn("w:sz"), str(kalinlik))
+        eleman.set(qn("w:space"), "0")
+        eleman.set(qn("w:color"), "000000")
+    ust_eleman.append(eleman)
+
+
+def hucre_alt_cizgisi(hucre, kalinlik=6):
     tcPr = hucre._tc.get_or_add_tcPr()
-    kenarlar = tcPr.find(qn("w:tcBorders"))
-    if kenarlar is None:
-        kenarlar = OxmlElement("w:tcBorders")
-        tcPr.append(kenarlar)
-    for yon, kalinlik in [("top", ust), ("bottom", alt)]:
-        if kalinlik is None:
-            continue
-        cizgi = OxmlElement(f"w:{yon}")
-        cizgi.set(qn("w:val"), "single")
-        cizgi.set(qn("w:sz"), str(kalinlik))
-        cizgi.set(qn("w:space"), "0")
-        cizgi.set(qn("w:color"), "000000")
-        kenarlar.append(cizgi)
+    kenarlar = OxmlElement("w:tcBorders")
+    cizgi(kenarlar, "bottom", kalinlik=kalinlik)
+    tcPr.append(kenarlar)
 
 
-def tablo_kenarlarini_kaldir(tablo):
-    # varsayılan bütün çizgileri kaldırıyor
-    tblPr = tablo._tbl.tblPr
-    kenarlar = OxmlElement("w:tblBorders")
-    for yon in ["top", "left", "bottom", "right", "insideH", "insideV"]:
-        cizgi = OxmlElement(f"w:{yon}")
-        cizgi.set(qn("w:val"), "nil")
-        kenarlar.append(cizgi)
-    tblPr.append(kenarlar)
-
-
-def yazi_yaz(hucre, metin, kalin=False, italik=False, hizalama="sol", punto=8):
-    hucre.text = ""
+def yazi_yaz(hucre, parcalar, kalin=False, italik=False, girinti=False):
+    # parcalar düz metin ya da [(metin, kalin, italik), ...] listesi olabilir
+    # metindeki "\n" hücre içinde alt satıra geçiyor
+    if isinstance(parcalar, str):
+        parcalar = [(parcalar, kalin, italik)]
     paragraf = hucre.paragraphs[0]
-    paragraf.paragraph_format.space_before = Pt(1)
-    paragraf.paragraph_format.space_after = Pt(1)
-    paragraf.alignment = WD_ALIGN_PARAGRAPH.LEFT if hizalama == "sol" else WD_ALIGN_PARAGRAPH.CENTER
-    parca = paragraf.add_run(metin)
-    parca.font.name = FONT
-    parca._element.rPr.rFonts.set(qn("w:eastAsia"), FONT)
-    parca.font.size = Pt(punto)
-    parca.bold = kalin
-    parca.italic = italik
+    paragraf.paragraph_format.space_before = Pt(0)
+    paragraf.paragraph_format.space_after = Pt(0)
+    paragraf.paragraph_format.line_spacing = 1.0
+    if girinti:
+        paragraf.paragraph_format.left_indent = Cm(0.2)
+    for metin, k, i in parcalar:
+        satirlar = metin.split("\n")
+        for sira, satir in enumerate(satirlar):
+            parca = paragraf.add_run(satir)
+            parca.font.size = Pt(8)
+            parca.bold = k
+            parca.italic = i
+            if sira < len(satirlar) - 1:
+                parca.add_break(WD_BREAK.LINE)
 
 
-def paragraf_yaz(belge, parcalar, punto=10, sonra=4):
-    # parcalar: [(metin, kalin_mi), ...]
-    paragraf = belge.add_paragraph()
-    paragraf.paragraph_format.space_after = Pt(sonra)
-    for metin, kalin in parcalar:
-        parca = paragraf.add_run(metin)
-        parca.font.name = FONT
-        parca.font.size = Pt(punto)
-        parca.bold = kalin
-    return paragraf
-
-
-def tablo_olustur(belge, numara, baslik, sutun_basliklari, satirlar, dipnot, sutun_genislikleri):
+def tablo_olustur(numara, baslik, sutun_basliklari, satirlar, dipnot, sutun_genislikleri):
     # satır türleri:
-    #   ("bolum", "Bölüm adı")       -> bütün sütunları kaplayan birleşik satır
-    #   ("veri", [hücre1, hücre2..]) -> normal satır, ilk hücre sola diğerleri ortaya hizalı
-    #   ("veri_girinti", [...])      -> ilk hücresi içeriden başlayan normal satır
+    #   ("bolum", "Bölüm adı")       -> bütün sütunları kaplayan birleşik, kalın-italik satır
+    #   ("veri", [hücre1, hücre2..]) -> normal satır
+    #   ("veri_girinti", [...])      -> ilk hücresi biraz içeriden başlayan normal satır
     #   ("alt_baslik", [...])        -> tablonun ortasında kalın yazılan yeni sütun başlıkları
-    paragraf_yaz(belge, [(f"Table {numara}. ", True), (baslik, False)])
+    # sutun_genislikleri twip cinsinden, toplamı TABLO_GENISLIGI
+    belge = yeni_belge()
+
+    baslik_paragrafi = belge.add_paragraph()
+    baslik_paragrafi.add_run(f"Table {numara}. {baslik}").bold = True
 
     sutun_sayisi = len(sutun_basliklari)
     tablo = belge.add_table(rows=1, cols=sutun_sayisi)
-    tablo.alignment = WD_TABLE_ALIGNMENT.CENTER
+    tablo.style = belge.styles["Table Grid"]
     tablo.autofit = False
-    tablo_kenarlarini_kaldir(tablo)
+
+    tblPr = tablo._tbl.tblPr
+    genislik = OxmlElement("w:tblW")
+    genislik.set(qn("w:w"), str(TABLO_GENISLIGI))
+    genislik.set(qn("w:type"), "dxa")
+    tblPr.append(genislik)
+    kenarlar = OxmlElement("w:tblBorders")
+    cizgi(kenarlar, "top")
+    cizgi(kenarlar, "left", "nil")
+    cizgi(kenarlar, "bottom")
+    cizgi(kenarlar, "right", "nil")
+    cizgi(kenarlar, "insideH", "nil")
+    cizgi(kenarlar, "insideV", "nil")
+    tblPr.append(kenarlar)
+    duzen = OxmlElement("w:tblLayout")
+    duzen.set(qn("w:type"), "fixed")
+    tblPr.append(duzen)
 
     for i, metin in enumerate(sutun_basliklari):
         hucre = tablo.rows[0].cells[i]
-        yazi_yaz(hucre, metin, kalin=True, hizalama="sol" if i == 0 else "orta")
-        hucre_kenari(hucre, ust=8, alt=4)
+        yazi_yaz(hucre, metin, kalin=True)
+        hucre_alt_cizgisi(hucre)
 
     for tur, icerik in satirlar:
         yeni = tablo.add_row().cells
         if tur == "bolum":
             birlesik = yeni[0].merge(yeni[-1])
-            yazi_yaz(birlesik, icerik, kalin=True)
+            yazi_yaz(birlesik, icerik, kalin=True, italik=True)
         else:
             for i, metin in enumerate(icerik):
-                if i == 0 and tur == "veri_girinti":
-                    metin = "   " + metin
-                yazi_yaz(yeni[i], metin, kalin=(tur == "alt_baslik"), hizalama="sol" if i == 0 else "orta")
+                yazi_yaz(yeni[i], metin, kalin=(tur == "alt_baslik"), girinti=(i == 0 and tur == "veri_girinti"))
 
-    for hucre in tablo.rows[-1].cells:
-        hucre_kenari(hucre, alt=8)
+    for i, g in enumerate(sutun_genislikleri):
+        tablo.columns[i].width = Twips(g)
+        for satir in tablo.rows:
+            satir.cells[i].width = Twips(g)
 
-    # sütun genişliklerini sabitliyoruz
-    duzen = OxmlElement("w:tblLayout")
-    duzen.set(qn("w:type"), "fixed")
-    tablo._tbl.tblPr.append(duzen)
-    for i, genislik in enumerate(sutun_genislikleri):
-        tablo.columns[i].width = Cm(genislik)
-    for satir in tablo.rows:
-        for i, genislik in enumerate(sutun_genislikleri):
-            satir.cells[i].width = Cm(genislik)
+    dipnot_paragrafi = belge.add_paragraph()
+    dipnot_paragrafi.paragraph_format.line_spacing = 1.0
+    dipnot_paragrafi.add_run(dipnot).font.size = Pt(8)
 
-    # tablo sonraki sayfaya taşarsa başlık satırı tekrar ediyor
-    trPr = tablo.rows[0]._tr.get_or_add_trPr()
-    tekrar = OxmlElement("w:tblHeader")
-    tekrar.set(qn("w:val"), "true")
-    trPr.append(tekrar)
-
-    paragraf = paragraf_yaz(belge, [(dipnot, False)], punto=8, sonra=0)
-    paragraf.paragraph_format.space_before = Pt(3)
-    return tablo
-
-
-# her tablo yeni bir bölümde, yatay ya da dikey sayfada başlıyor
-def yeni_bolum(belge, yatay=False):
-    bolum = belge.add_section(WD_SECTION.NEW_PAGE)
-    if yatay:
-        bolum.orientation = WD_ORIENT.LANDSCAPE
-        bolum.page_width, bolum.page_height = Cm(29.7), Cm(21.0)
-    else:
-        bolum.orientation = WD_ORIENT.PORTRAIT
-        bolum.page_width, bolum.page_height = Cm(21.0), Cm(29.7)
-
-
-belge = Document()
-bolum = belge.sections[0]
-bolum.orientation = WD_ORIENT.PORTRAIT
-bolum.page_width, bolum.page_height = Cm(21.0), Cm(29.7)
-for kenar in ["left_margin", "right_margin", "top_margin", "bottom_margin"]:
-    setattr(bolum, kenar, Cm(2.0))
+    dosya = tablo_klasoru / f"Table{numara}.docx"
+    belge.save(dosya)
+    print("kaydedildi:", dosya)
 
 
 # ---------------------------------------------------------------
@@ -244,7 +234,7 @@ for bolum_adi, sutun, kategoriler in tablo1_icerik:
         satirlar.append(("veri_girinti", hucreler))
 
 tablo_olustur(
-    belge, 1,
+    1,
     "Characteristics of the participants and their haemodialysis units, overall and by specialty",
     ["Characteristic",
      f"All\n(n = {len(veri)})",
@@ -255,14 +245,12 @@ tablo_olustur(
     "Values are n (%). Percentages are calculated among participants who answered each question. "
     "Private hospital and private dialysis centre were combined. "
     "HD, haemodialysis; LTBI, latent tuberculosis infection; TB, tuberculosis.",
-    [6.6, 2.6, 2.6, 2.6, 2.6],
+    [3729, 1350, 1350, 1350, 1350],
 )
-yeni_bolum(belge, yatay=True)
 
 
 # ---------------------------------------------------------------
 # Table 2: bilgi ve senaryo maddeleri, branşa göre doğru yanıt
-# bu tablo yatay sayfada
 # ---------------------------------------------------------------
 madde_metinleri = {
     "D1": ("Test(s) used for LTBI screening", "TST and IGRA"),
@@ -293,7 +281,7 @@ madde_metinleri = {
 def madde_satiri(soru):
     m = maddeler.loc[soru]
     metin, anahtar = madde_metinleri[soru]
-    hucreler = [f"{soru}. {metin}", anahtar,
+    hucreler = [[(f"{soru}. {metin}\n", False, False), (f"Correct: {anahtar}", False, True)],
                 yuzde_yaz(int(m["dogru_n"]), int(m["yanitlayan"])),
                 yuzde_yaz(int(m["bilmiyorum_n"]), int(m["yanitlayan"]))]
     for b in brans_sira:
@@ -307,7 +295,7 @@ def madde_satiri(soru):
 
 
 def skor_satiri(etiket, skor, p):
-    hucreler = [etiket, "", f"{veri[skor].mean():.2f} ± {veri[skor].std():.2f}", ""]
+    hucreler = [etiket, f"{veri[skor].mean():.2f} ± {veri[skor].std():.2f}", ""]
     for b in brans_sira:
         alt = veri[veri["brans"] == b][skor].dropna()
         hucreler.append(f"{alt.mean():.2f} ± {alt.std():.2f}")
@@ -327,10 +315,10 @@ satirlar.append(("veri", skor_satiri("Scenario score (0–2), mean ± SD", "sena
                                      s02["aile|brans|senaryo_skoru|p"])))
 
 tablo_olustur(
-    belge, 2,
+    2,
     "Correct answers to the knowledge items and clinical scenarios, overall and by specialty",
-    ["Item", "Correct answer", "Correct,\nall", "\"Don't know\",\nall",
-     "Nephrologists,\ncorrect", "Internists,\ncorrect", "General practitioners,\ncorrect", "p"],
+    ["Item", "Correct, all", "\"Don't know\", all",
+     "Nephrologists, correct", "Internists, correct", "General practitioners, correct", "p"],
     satirlar,
     "Values are n (%) unless otherwise stated. Percentages are calculated among participants who answered "
     "each item. An item was scored as correct when the correct option was marked alone or together with "
@@ -342,9 +330,8 @@ tablo_olustur(
     "ESKD, end-stage kidney disease; HD, haemodialysis; IGRA, interferon-gamma release assay; "
     "KR-20, Kuder–Richardson formula 20; LTBI, latent tuberculosis infection; SD, standard deviation; "
     "TB, tuberculosis; TST, tuberculin skin test.",
-    [7.0, 5.6, 2.0, 2.0, 2.4, 2.0, 2.4, 1.4],
+    [2779, 1050, 1050, 1200, 1050, 1300, 700],
 )
-yeni_bolum(belge)
 
 
 # ---------------------------------------------------------------
@@ -408,7 +395,7 @@ for etiket, degisken in firth_etiketleri:
     satirlar.append(("veri_girinti", [etiket, f"{m['OR']:.2f}", ga_yaz(m["ga_alt"], m["ga_ust"]), p_yaz(m["p"])]))
 
 tablo_olustur(
-    belge, 3,
+    3,
     "Factors associated with the knowledge score and with having requested LTBI screening",
     ["Variable", "β", "95% CI", "p"],
     satirlar,
@@ -424,9 +411,8 @@ tablo_olustur(
     "scores indicating more barriers. "
     "CI, confidence interval; HD, haemodialysis; LTBI, latent tuberculosis infection; OR, odds ratio; "
     "ref., reference category; TB, tuberculosis.",
-    [9.0, 2.0, 3.3, 1.7],
+    [5229, 1100, 1900, 900],
 )
-yeni_bolum(belge)
 
 
 # ---------------------------------------------------------------
@@ -501,16 +487,13 @@ satirlar += tek_soru_satirlari("algoritma_ihtiyaci",
                                 ("Contact management", "Temaslı yönetimi")])
 
 tablo_olustur(
-    belge, 4,
+    4,
     "Reported LTBI screening practice, management of suspected active TB and training needs",
     ["Question and response", f"n (%)"],
     satirlar,
     "Percentages are calculated among participants who answered each question. "
     "HD, haemodialysis; IGRA, interferon-gamma release assay; LTBI, latent tuberculosis infection; "
     "TB, tuberculosis; TST, tuberculin skin test.",
-    [12.5, 3.0],
+    [7629, 1500],
 )
 
-
-belge.save(tablo_klasoru / "Tablolar.docx")
-print("tablolar kaydedildi:", tablo_klasoru / "Tablolar.docx")
