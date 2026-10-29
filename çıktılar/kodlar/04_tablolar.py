@@ -15,6 +15,7 @@
 #   çıktılar/tablolar/Supplementary_Table_S1.docx ... Supplementary_Table_S3.docx
 
 import json
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -62,6 +63,8 @@ def p_yaz(p):
 
 
 def eksi(metin):
+    # sıfıra yuvarlanan negatif değerlerde eksi işareti kaldırılıyor ("-0.00" yerine "0.00")
+    metin = re.sub(r"-(0(?:\.0+)?)(?![\d.])", r"\1", metin)
     # tire yerine eksi işareti
     return metin.replace("-", "−")
 
