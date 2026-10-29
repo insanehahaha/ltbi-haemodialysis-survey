@@ -47,8 +47,8 @@ python çıktılar/kodlar/06_kontrol.py
 | `01_veri_hazirlama.py` | Reads the raw data, applies the answer key and scoring rules, creates the coded dataset |
 | `02_tanimlayici.py` | Descriptive statistics, internal consistency (KR-20, Cronbach's alpha), group comparisons, correlations, exploratory comparisons with Benjamini–Hochberg correction |
 | `03_modeller.py` | Linear regression models with HC3 standard errors for the knowledge score; Firth penalized logistic regression for LTBI screening; sensitivity analyses with strict scoring |
-| `04_tablolar.py` | Tables 1–4 (Word) |
-| `05_sekiller.py` | Figure 1 (TIFF, 600 dpi) |
+| `04_tablolar.py` | Tables 1–4 and Supplementary Tables S1–S3 (Word) |
+| `05_sekiller.py` | Figure 1 (vector PDF, 169 mm wide, with a PNG preview) |
 | `06_kontrol.py` | Compares every reported number with values obtained in two independent analyses in R and produces a verification ledger |
 
 Outputs are written to `çıktılar/veri`, `çıktılar/tablolar` and `çıktılar/şekiller`.
