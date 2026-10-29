@@ -1,7 +1,7 @@
 # 04_tablolar.py
 # python 3.11.17, paket sürümleri requirements.txt dosyasında
 #
-# bu dosya makaledeki dört tabloyu word dosyası olarak hazırlar
+# bu dosya makaledeki dört tabloyu ve üç ek tabloyu word dosyası olarak hazırlar
 # tablolar ingilizce, önceki makalelerimizdeki biçimde:
 #   Times New Roman, tablo içi 8 punto, A4 dikey sayfa
 #   Word'ün "Table Grid" stili, sadece üç yatay çizgi (en üst, başlık satırının altı, en alt)
@@ -10,7 +10,9 @@
 #
 # sayılar kodlanmış veriden ve 02 ile 03'ün kaydettiği sonuçlardan okunuyor
 #
-# çıktı: her tablo ayrı word dosyası, çıktılar/tablolar/Table1.docx ... Table4.docx
+# çıktı: her tablo ayrı word dosyası
+#   çıktılar/tablolar/Table1.docx ... Table4.docx
+#   çıktılar/tablolar/Supplementary_Table_S1.docx ... Supplementary_Table_S3.docx
 
 import json
 from pathlib import Path
@@ -32,6 +34,9 @@ veri = pd.read_csv(veri_klasoru / "kodlanmis_veri.csv")
 s02 = json.load(open(veri_klasoru / "sayilar_02.json", encoding="utf-8"))
 s03 = json.load(open(veri_klasoru / "sayilar_03.json", encoding="utf-8"))
 maddeler = pd.read_excel(veri_klasoru / "tanimlayici_sonuclar.xlsx", sheet_name="T2_maddeler").set_index("madde")
+kesifsel_aile = pd.read_excel(veri_klasoru / "tanimlayici_sonuclar.xlsx", sheet_name="kesifsel_grup_karsilastirmalari")
+kesifsel_bariyer = pd.read_excel(veri_klasoru / "tanimlayici_sonuclar.xlsx",
+                                 sheet_name="kesifsel_bariyer_maddeleri").set_index("madde")
 modeller = pd.read_excel(veri_klasoru / "model_sonuclari.xlsx", sheet_name=None, index_col=0)
 
 FONT = "Times New Roman"
@@ -122,7 +127,8 @@ def yazi_yaz(hucre, parcalar, kalin=False, italik=False, girinti=False):
                 parca.add_break(WD_BREAK.LINE)
 
 
-def tablo_olustur(numara, baslik, sutun_basliklari, satirlar, dipnot, sutun_genislikleri):
+def tablo_olustur(numara, baslik, sutun_basliklari, satirlar, dipnot, sutun_genislikleri, ek=False):
+    # ek=True ise başlık "Supplementary Table S1." gibi yazılıyor
     # satır türleri:
     #   ("bolum", "Bölüm adı")       -> bütün sütunları kaplayan birleşik, kalın-italik satır
     #   ("veri", [hücre1, hücre2..]) -> normal satır
@@ -132,7 +138,8 @@ def tablo_olustur(numara, baslik, sutun_basliklari, satirlar, dipnot, sutun_geni
     belge = yeni_belge()
 
     baslik_paragrafi = belge.add_paragraph()
-    baslik_paragrafi.add_run(f"Table {numara}. {baslik}").bold = True
+    on_ek = "Supplementary Table" if ek else "Table"
+    baslik_paragrafi.add_run(f"{on_ek} {numara}. {baslik}").bold = True
 
     sutun_sayisi = len(sutun_basliklari)
     tablo = belge.add_table(rows=1, cols=sutun_sayisi)
@@ -179,7 +186,7 @@ def tablo_olustur(numara, baslik, sutun_basliklari, satirlar, dipnot, sutun_geni
     dipnot_paragrafi.paragraph_format.line_spacing = 1.0
     dipnot_paragrafi.add_run(dipnot).font.size = Pt(8)
 
-    dosya = tablo_klasoru / f"Table{numara}.docx"
+    dosya = tablo_klasoru / (f"Supplementary_Table_{numara}.docx" if ek else f"Table{numara}.docx")
     belge.save(dosya)
     print("kaydedildi:", dosya)
 
@@ -337,7 +344,8 @@ tablo_olustur(
 # ---------------------------------------------------------------
 # Table 3: çok değişkenli modeller
 # ---------------------------------------------------------------
-# bilgi skoru için üç doğrusal model ve tarama için Firth modeli
+# bilgi skoru için iki doğrusal model ve tarama için Firth modeli
+# keşifsel model C ve katı puanlama sonuçları ek tablo S1'de
 
 def ga_yaz(alt, ust, ondalik=2):
     return eksi(f"{alt:.{ondalik}f} to {ust:.{ondalik}f}")
@@ -371,16 +379,6 @@ satirlar.append(ols_satiri("model_B", "Özel", "Private (ref. academic)"))
 for etiket, katsayi in ortak_satirlar:
     satirlar.append(ols_satiri("model_B", katsayi, etiket))
 
-satirlar.append(("bolum", f"Knowledge score, linear regression — Model C: working environment, exploratory "
-                          f"(n = {s03['model_C|n']}; R² = {s03['model_C|r2']:.3f})"))
-satirlar.append(ols_satiri("model_C", "Nephrologist, state/private",
-                           "Nephrologist, state or private (ref. nephrologist, academic)"))
-satirlar.append(ols_satiri("model_C", "Internist", "Internist (ref. nephrologist, academic)"))
-satirlar.append(ols_satiri("model_C", "General practitioner",
-                           "General practitioner (ref. nephrologist, academic)"))
-for etiket, katsayi in ortak_satirlar:
-    satirlar.append(ols_satiri("model_C", katsayi, etiket))
-
 satirlar.append(("bolum", "Requested LTBI screening in the past 12 months, Firth logistic regression "
                           f"(n = {s03['firth|n']}; {s03['firth|olay']} events)"))
 satirlar.append(("alt_baslik", ["", "OR", "95% CI", "p"]))
@@ -400,15 +398,16 @@ tablo_olustur(
     ["Variable", "β", "95% CI", "p"],
     satirlar,
     "β is the difference in knowledge score (0–10 points) compared with the reference category. "
-    "Models A, B and C were fitted separately because specialty and type of centre were strongly "
-    f"associated (Cramér's V = {s02['cramer_v_brans_merkez']:.2f}); all three were adjusted for the same "
+    "Models A and B were fitted separately because specialty and type of centre were strongly "
+    f"associated (Cramér's V = {s02['cramer_v_brans_merkez']:.2f}); both were adjusted for the same "
     "covariates and fitted in the same participants with complete data. Linear models used "
     "heteroscedasticity-consistent (HC3) standard errors. Academic centres include university and training "
     "and research hospitals. The outcome of the Firth penalized logistic regression model was having requested "
     "LTBI screening for at least one patient in the past 12 months; participants who did not remember the "
     "number of screenings were excluded. Confidence intervals are profile penalized likelihood intervals and "
     "p values are from penalized likelihood ratio tests. The barrier score ranges from 1 to 5, with higher "
-    "scores indicating more barriers. "
+    "scores indicating more barriers. The exploratory working-environment model and the strict-scoring "
+    "sensitivity analyses are presented in Supplementary Table S1. "
     "CI, confidence interval; HD, haemodialysis; LTBI, latent tuberculosis infection; OR, odds ratio; "
     "ref., reference category; TB, tuberculosis.",
     [5229, 1100, 1900, 900],
@@ -497,3 +496,158 @@ tablo_olustur(
     [7629, 1500],
 )
 
+
+
+# ---------------------------------------------------------------
+# Supplementary Table S1: keşifsel model C ve katı puanlama
+# ---------------------------------------------------------------
+# her satırda birincil puanlama ile katı puanlama yan yana
+
+def tahmin_yaz(m, anahtar="beta"):
+    return eksi(f"{m[anahtar]:.2f} ({m['ga_alt']:.2f} to {m['ga_ust']:.2f})")
+
+
+def yan_yana_satir(birincil, kati, katsayi, etiket, katsayi_kati=None, anahtar="beta"):
+    a = modeller[birincil].loc[katsayi]
+    b = modeller[kati].loc[katsayi_kati or katsayi]
+    return ("veri_girinti", [etiket, tahmin_yaz(a, anahtar), p_yaz(a["p"]), tahmin_yaz(b, anahtar), p_yaz(b["p"])])
+
+
+satirlar = []
+satirlar.append(("bolum", f"Knowledge score — Model A: specialty (n = {s03['model_A|n']})"))
+satirlar.append(yan_yana_satir("model_A", "model_A_kati", "İç hastalıkları", "Internist (ref. nephrologist)"))
+satirlar.append(yan_yana_satir("model_A", "model_A_kati", "Pratisyen hekim", "General practitioner (ref. nephrologist)"))
+for etiket, katsayi in ortak_satirlar:
+    satirlar.append(yan_yana_satir("model_A", "model_A_kati", katsayi, etiket))
+
+satirlar.append(("bolum", f"Knowledge score — Model B: type of centre (n = {s03['model_B|n']})"))
+satirlar.append(yan_yana_satir("model_B", "model_B_kati", "Devlet", "State hospital (ref. academic)"))
+satirlar.append(yan_yana_satir("model_B", "model_B_kati", "Özel", "Private (ref. academic)"))
+for etiket, katsayi in ortak_satirlar:
+    satirlar.append(yan_yana_satir("model_B", "model_B_kati", katsayi, etiket))
+
+satirlar.append(("bolum", f"Knowledge score — Model C: working environment, exploratory (n = {s03['model_C|n']})"))
+satirlar.append(yan_yana_satir("model_C", "model_C_kati", "Nephrologist, state/private",
+                               "Nephrologist, state or private (ref. nephrologist, academic)"))
+satirlar.append(yan_yana_satir("model_C", "model_C_kati", "Internist", "Internist (ref. nephrologist, academic)"))
+satirlar.append(yan_yana_satir("model_C", "model_C_kati", "General practitioner",
+                               "General practitioner (ref. nephrologist, academic)"))
+for etiket, katsayi in ortak_satirlar:
+    satirlar.append(yan_yana_satir("model_C", "model_C_kati", katsayi, etiket))
+
+satirlar.append(("bolum", "Requested LTBI screening in the past 12 months, Firth logistic regression "
+                          f"(n = {s03['firth|n']}; {s03['firth|olay']} events)"))
+satirlar.append(("alt_baslik", ["", "OR (95% CI)", "p", "OR (95% CI)", "p"]))
+for etiket, degisken in firth_etiketleri:
+    kati_degisken = "bilgi_skoru_kati" if degisken == "bilgi_skoru" else degisken
+    satirlar.append(yan_yana_satir("firth", "firth_kati", degisken, etiket, kati_degisken, anahtar="OR"))
+
+tablo_olustur(
+    "S1",
+    "Exploratory working-environment model and sensitivity analyses with strict scoring",
+    ["Variable", "Primary scoring\nβ (95% CI)", "p", "Strict scoring\nβ (95% CI)", "p"],
+    satirlar,
+    "Primary scoring counted an item as correct when the correct option was marked alone or together with one "
+    "other option; strict scoring counted every multiple selection as incorrect. The primary-scoring results of "
+    "Models A and B and of the Firth model are also shown in Table 3. β is the difference in knowledge score "
+    "(0–10 points) compared with the reference category. Model C combined specialty and type of centre into a "
+    "single working-environment variable and was fitted as an exploratory analysis. All linear models were "
+    "adjusted for the same covariates, fitted in the same participants and used heteroscedasticity-consistent "
+    "(HC3) standard errors. In the Firth model, the knowledge score was calculated with the same scoring rule as "
+    "in each column; confidence intervals are profile penalized likelihood intervals and p values are from "
+    "penalized likelihood ratio tests. "
+    "CI, confidence interval; HD, haemodialysis; LTBI, latent tuberculosis infection; OR, odds ratio; "
+    "ref., reference category; TB, tuberculosis.",
+    [3829, 1900, 700, 1900, 800],
+    ek=True,
+)
+
+
+# ---------------------------------------------------------------
+# Supplementary Table S2: keşifsel grup karşılaştırmaları
+# ---------------------------------------------------------------
+# 10 özellik x 5 skor, her hücrede ham p ve parantez içinde benjamini-hochberg düzeltmeli p
+
+kesifsel_satir_etiketleri = [
+    ("Specialty", "brans"),
+    ("Years in medical practice", "hekimlik_yili"),
+    ("Years of haemodialysis experience", "hd_deneyimi"),
+    ("Type of centre", "merkez_4grup"),
+    ("Approximate number of patients in the unit", "hasta_sayisi"),
+    ("Separate area for patients with suspected TB", "izolasyon_alani"),
+    ("TB/LTBI training in the past 2 years", "egitim"),
+    ("Active TB case in the unit, past 12 months", "tb_olgusu"),
+    ("Evaluation of transplant candidates in the unit", "transplant_degerlendirme"),
+    ("Written TB/LTBI protocol in the unit", "yazili_protokol"),
+]
+kesifsel_skorlar = ["bilgi_skoru", "senaryo_skoru", "farkindalik", "ozyeterlik", "bariyer"]
+
+satirlar = []
+for etiket, grup in kesifsel_satir_etiketleri:
+    hucreler = [etiket]
+    for skor in kesifsel_skorlar:
+        satir = kesifsel_aile[(kesifsel_aile["grup"] == grup) & (kesifsel_aile["skor"] == skor)].iloc[0]
+        metin = f"{p_yaz(satir['p'])} ({p_yaz(satir['q_bh'])})"
+        hucreler.append([(metin, bool(satir["q_bh"] < 0.05), False)])
+    satirlar.append(("veri", hucreler))
+
+tablo_olustur(
+    "S2",
+    "Exploratory comparisons of scores across participant and unit characteristics",
+    ["Characteristic", "Knowledge score", "Scenario score", "Awareness score", "Self-efficacy score",
+     "Barrier score"],
+    satirlar,
+    "Values are unadjusted p values, with p values adjusted by the Benjamini–Hochberg method across all 50 "
+    "comparisons in parentheses; adjusted p values below 0.05 are shown in bold. Two groups were compared with "
+    "the Mann–Whitney U test and three or more groups with the Kruskal–Wallis test. Categories are as in "
+    "Table 1; “don't know” responses were analysed as a separate category, except for the number of patients "
+    "in the unit, for which they were treated as missing. "
+    "LTBI, latent tuberculosis infection; TB, tuberculosis.",
+    [2629, 1300, 1300, 1300, 1300, 1300],
+    ek=True,
+)
+
+
+# ---------------------------------------------------------------
+# Supplementary Table S3: bariyer maddeleri, tarama isteyen ve istemeyenler
+# ---------------------------------------------------------------
+# ortalama ve standart sapma kodlanmış veriden, p değerleri 02'nin sonuçlarından
+
+bariyer_madde_etiketleri = [
+    ("G1. Access to tests for LTBI screening is easy", "G1"),
+    ("G2. Interpreting the results is challenging", "G2"),
+    ("G3a. Hesitant to start LTBI treatment because of drug interactions", "G3a"),
+    ("G3b. Hesitant to start LTBI treatment because of adverse effects", "G3b"),
+    ("G4. Time constraints are a major barrier", "G4"),
+    ("G5. There is a clear workflow for TB in the unit", "G5"),
+    ("G7. Sharing of responsibility between specialties is not clear", "G7"),
+]
+isteyen = veri[veri["tarama_istemis"] == 1]
+istemeyen = veri[veri["tarama_istemis"] == 0]
+
+
+def ort_ss(seri):
+    seri = seri.dropna()
+    return f"{seri.mean():.2f} ± {seri.std():.2f}"
+
+
+satirlar = []
+for etiket, madde in bariyer_madde_etiketleri:
+    satir = kesifsel_bariyer.loc[madde]
+    satirlar.append(("veri", [etiket, ort_ss(isteyen[madde]), ort_ss(istemeyen[madde]),
+                              p_yaz(satir["p"]), p_yaz(satir["q_bh"])]))
+
+tablo_olustur(
+    "S3",
+    "Barrier items in participants who did and did not request LTBI screening in the past 12 months",
+    ["Item", f"Requested\n(n = {len(isteyen)})", f"Did not request\n(n = {len(istemeyen)})", "p", "Adjusted p"],
+    satirlar,
+    "Values are mean ± standard deviation of the raw responses on a five-point Likert scale "
+    "(1 = strongly disagree, 5 = strongly agree), calculated among participants who answered each item. "
+    "G1 and G5 are positively worded and are shown without reverse coding. Participants who did not remember "
+    "the number of screenings were excluded. p values are from the Mann–Whitney U test; adjusted p values were "
+    "calculated with the Benjamini–Hochberg method across the seven items. "
+    "LTBI, latent tuberculosis infection; TB, tuberculosis.",
+    [4129, 1500, 1500, 900, 1100],
+    ek=True,
+)

@@ -5,7 +5,7 @@
 #   denetim 1: R ile yapılan istatistik denetimi (lm + sandwich HC3, kruskal.test, wilcox.test)
 #             Firth modeli için R'daki logistf ile doğrulanmış firthlogist
 #   denetim 2: ham veriden sıfırdan, farklı bir kodla yapılan ikinci R tekrarı
-# ayrıca Word tablolarındaki birkaç hücreyi de okuyup aynı referanslarla karşılaştırır
+# ayrıca Word tablolarındaki ve ek tablolardaki birkaç hücreyi de okuyup aynı referanslarla karşılaştırır
 #
 # referans değerler denetim çıktılarından aynen alındı
 #
@@ -28,6 +28,7 @@ sayilar.update(json.load(open(veri_klasoru / "sayilar_03.json", encoding="utf-8"
 
 R1 = "Denetim 1 (R)"
 R2 = "Denetim 2 (R, bağımsız tekrar)"
+R3 = "Ham veriden ayrı sayım (farklı kod)"
 
 # her satır: (anahtar, açıklama, referans değer, tolerans, kaynak)
 # tolerans: yuvarlanmış değer ile referans arasında kabul edilen en büyük fark
@@ -77,6 +78,11 @@ referanslar = [
     ("skor|bilgi_skoru|q3", "Bilgi skoru 3. çeyrek", 9, 0, R2),
     ("kr20", "KR-20", 0.72093, 0.0005, R2),
     ("skor|bilgi_skoru_kati|ortalama", "Katı bilgi skoru ortalama", 6.9512, 0.005, R2),
+    ("coklu|katilimci_n", "Bilgi/senaryo maddelerinde birden fazla seçenek işaretleyen katılımcı", 17, 0, R3),
+    ("coklu|madde_yaniti_n", "Birden fazla seçenek işaretlenen madde yanıtı", 22, 0, R3),
+    ("coklu|yanitlanan_madde_n", "Yanıtlanan bilgi/senaryo madde yanıtı", 1507, 0, R3),
+    ("kati|bilgi_skoru_degisen_n", "Katı puanlamada bilgi skoru değişen katılımcı", 10, 0, R3),
+    ("kati|bilgi_skoru_payda", "Bilgi skoru hesaplanan katılımcı", 123, 0, R2),
     ("skor|senaryo_skoru|ortalama", "Senaryo skoru ortalama", 1.728, 0.005, R2),
     ("skor|senaryo_skoru|ss", "Senaryo skoru SS", 0.52939, 0.005, R2),
     ("skor|bilmiyorum_sayisi|ortalama", "Bilmiyorum sayısı ortalama", 1.8943, 0.005, R2),
@@ -222,6 +228,9 @@ def satir_bul(tablo, baslangic, kacinci=0):
 
 tablo2 = Document(tablo_klasoru / "Table2.docx").tables[0]
 tablo3 = Document(tablo_klasoru / "Table3.docx").tables[0]
+ek_tablo1 = Document(tablo_klasoru / "Supplementary_Table_S1.docx").tables[0]
+ek_tablo2 = Document(tablo_klasoru / "Supplementary_Table_S2.docx").tables[0]
+ek_tablo3 = Document(tablo_klasoru / "Supplementary_Table_S3.docx").tables[0]
 
 tablo_kontrolleri = [
     ("Table 2, D5 doğru", satir_bul(tablo2, "D5.")[1], "53 (42.4)"),
@@ -238,14 +247,27 @@ tablo_kontrolleri = [
      "−1.45 | −2.44 to −0.47 | 0.004"),
     ("Table 3, model B özel", " | ".join(satir_bul(tablo3, "Private (ref. academic)")[1:]),
      "−1.18 | −2.48 to 0.13 | 0.076"),
-    ("Table 3, model C pratisyen", " | ".join(satir_bul(tablo3, "General practitioner (ref. nephrologist, academic)")[1:]),
-     "−1.69 | −2.78 to −0.60 | 0.003"),
     ("Table 3, Firth TB olgusu", " | ".join(satir_bul(tablo3, "Active TB case")[1:]),
      "16.61 | 4.95 to 69.98 | <0.001"),
     ("Table 3, Firth bilgi", " | ".join(satir_bul(tablo3, "Knowledge score, per 1 point")[1:]),
      "1.34 | 1.01 to 1.91 | 0.044"),
     ("Table 3, Firth bariyer", " | ".join(satir_bul(tablo3, "Barrier score, per 1 point")[1:]),
      "0.47 | 0.21 to 0.98 | 0.044"),
+    # ek tablolar
+    ("Ek tablo S1, model C pratisyen (birincil)",
+     " | ".join(satir_bul(ek_tablo1, "General practitioner (ref. nephrologist, academic)")[1:3]),
+     "−1.69 (−2.78 to −0.60) | 0.003"),
+    ("Ek tablo S1, model A pratisyen (katı)",
+     " | ".join(satir_bul(ek_tablo1, "General practitioner (ref. nephrologist)")[3:5]),
+     "−1.47 (−2.54 to −0.41) | 0.007"),
+    ("Ek tablo S1, Firth bilgi (katı)",
+     " | ".join(satir_bul(ek_tablo1, "Knowledge score, per 1 point")[3:5]),
+     "1.31 (0.98 to 1.84) | 0.064"),
+    ("Ek tablo S2, branşa göre bilgi skoru", satir_bul(ek_tablo2, "Specialty")[1], "0.002 (0.033)"),
+    ("Ek tablo S2, branşa göre bariyer skoru", satir_bul(ek_tablo2, "Specialty")[5], "<0.001 (0.021)"),
+    ("Ek tablo S2, transplant değerlendirmesine göre bariyer skoru",
+     satir_bul(ek_tablo2, "Evaluation of transplant")[5], "<0.001 (0.021)"),
+    ("Ek tablo S3, G1", " | ".join(satir_bul(ek_tablo3, "G1.")[1:]), "3.61 ± 1.43 | 2.71 ± 1.32 | 0.003 | 0.020"),
 ]
 
 tablo_satirlari = []

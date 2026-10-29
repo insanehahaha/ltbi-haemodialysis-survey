@@ -89,7 +89,7 @@ def ols_kur(ad, sonuc, ana_degisken):
         kisit[satir, sutun] = 1
     wald = model.wald_test(kisit, scalar=True)
 
-    tablolar[ad] = tablo.round(4)
+    tablolar[ad] = tablo.round(6)
     sayilar[f"{ad}|n"] = int(model.nobs)
     sayilar[f"{ad}|r2"] = round(model.rsquared, 3)
     sayilar[f"{ad}|duzeltilmis_r2"] = round(model.rsquared_adj, 3)
@@ -137,7 +137,7 @@ def firth_kur(ad, aciklayicilar):
         "p": model.pvals_[:len(aciklayicilar)],
     }, index=aciklayicilar)
 
-    tablolar[ad] = tablo.round(4)
+    tablolar[ad] = tablo.round(6)
     sayilar[f"{ad}|n"] = int(len(y))
     sayilar[f"{ad}|olay"] = int(y.sum())
     for isim, satir in tablo.iterrows():

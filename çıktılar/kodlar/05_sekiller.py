@@ -1,7 +1,10 @@
 # 05_sekiller.py
 # python 3.11.17, paket sürümleri requirements.txt dosyasında
 #
-# bu dosya makaledeki şekli TIFF olarak hazırlar (600 dpi)
+# bu dosya makaledeki şekli PDF olarak hazırlar
+# dergi (Clinical Kidney Journal) şekilleri EPS, AI, SVG, PDF gibi formatlarda istiyor, TIFF listede yok
+# PDF vektörel olduğu için çözünürlük sorunu yok, yazılar seçilebilir kalıyor
+# şekil genişliği derginin tam sayfa genişliği olan 169 mm ile sınırlı
 # önceki makalelerimizdeki biçim:
 #   şeklin içinde başlık yok, başlık şekil altyazısında yazılacak
 #   birden fazla panel varsa sol üstte küçük harf (a, b)
@@ -11,7 +14,7 @@
 #
 #   şekil 1: likert maddeleri, a paneli farkındalık ve öz-yeterlik, b paneli engeller ve tutumlar
 #
-# çıktı: çıktılar/şekiller/Figure1.tif
+# çıktı: çıktılar/şekiller/Figure1.pdf (dergiye yüklenecek dosya) ve Figure1_onizleme.png (sadece göz atmak için)
 
 from pathlib import Path
 
@@ -43,6 +46,8 @@ plt.rcParams.update({
     "figure.facecolor": "white",
     "axes.facecolor": "white",
     "legend.frameon": False,
+    # yazı tipi PDF'in içine gömülüyor (Type 42 = TrueType), yazılar düzenlenebilir kalıyor
+    "pdf.fonttype": 42,
 })
 
 # renkler
@@ -56,11 +61,10 @@ CM = 1 / 2.54
 
 
 def kaydet(sekil, ad):
-    # 600 dpi, LZW sıkıştırmalı TIFF
-    sekil.savefig(sekil_klasoru / f"{ad}.tif", dpi=600, format="tiff",
-                  pil_kwargs={"compression": "tiff_lzw"}, bbox_inches="tight", facecolor="white")
+    # vektörel PDF, sayfa boyutu şekil boyutuyla aynı (kırpma yapılmıyor ki genişlik 169 mm'yi geçmesin)
+    sekil.savefig(sekil_klasoru / f"{ad}.pdf", format="pdf", facecolor="white")
     # önizleme için küçük png kopyası
-    sekil.savefig(sekil_klasoru / f"{ad}_onizleme.png", dpi=150, bbox_inches="tight", facecolor="white")
+    sekil.savefig(sekil_klasoru / f"{ad}_onizleme.png", dpi=150, facecolor="white")
     plt.close(sekil)
 
 
@@ -128,12 +132,27 @@ def likert_ciz(eksen, etiketler):
     eksen.set_axisbelow(True)
 
 
-sekil, (eksen_a, eksen_b) = plt.subplots(2, 1, figsize=(17 * CM, 15 * CM),
+# genişlik 16.9 cm (dergi tam sayfa genişliği)
+sekil, (eksen_a, eksen_b) = plt.subplots(2, 1, figsize=(16.9 * CM, 15 * CM),
                                          gridspec_kw={"height_ratios": [6, 9], "hspace": 0.25})
 likert_ciz(eksen_a, likert_etiketleri_a)
 likert_ciz(eksen_b, likert_etiketleri_b)
 eksen_b.set_xlabel("Physicians (%)")
 eksen_a.legend(loc="lower center", bbox_to_anchor=(0.5, 1.05), ncol=5, fontsize=8, handlelength=1.2)
+
+# kenar boşlukları: madde etiketleri, açıklama kutusu ve yüzde yazıları sayfanın içinde kalacak şekilde ayarlanıyor
+# (birkaç turda ölçüp boşlukları düzeltiyoruz, böylece sayfa boyutu 16.9 x 15 cm olarak kalıyor)
+sol, sag, ust, alt = 0.35, 0.97, 0.91, 0.08
+for _ in range(5):
+    sekil.subplots_adjust(left=sol, right=sag, top=ust, bottom=alt)
+    sekil.canvas.draw()
+    kutu = sekil.get_tightbbox(sekil.canvas.get_renderer())
+    genislik, yukseklik = sekil.get_size_inches()
+    sol += 0.01 - kutu.x0 / genislik
+    sag -= kutu.x1 / genislik - 0.99
+    alt += 0.01 - kutu.y0 / yukseklik
+    ust -= kutu.y1 / yukseklik - 0.985
+sekil.subplots_adjust(left=sol, right=sag, top=ust, bottom=alt)
 # panel harfleri madde etiketlerinin en soluna
 sekil.canvas.draw()
 cizici = sekil.canvas.get_renderer()

@@ -229,6 +229,21 @@ for sutun in ["bilgi_skoru", "bilgi_skoru_kati", "senaryo_skoru", "senaryo_skoru
         sayilar[f"skor|{sutun}|{anahtar}"] = deger
 tablolar["skor_ozetleri"] = pd.DataFrame(skor_ozetleri).T
 
+# birden fazla seçenek işaretlenmesi ve katı puanlamanın bilgi skoruna etkisi
+coklu_sutunlari = [s + "_coklu" for s in bilgi_sorulari + ["E1", "E2"]]
+coklu = veri[coklu_sutunlari]
+sayilar["coklu|katilimci_n"] = int((coklu == 1).any(axis=1).sum())
+sayilar["coklu|katilimci_yuzde"] = round(sayilar["coklu|katilimci_n"] / N * 100, 1)
+sayilar["coklu|madde_yaniti_n"] = int((coklu == 1).values.sum())
+sayilar["coklu|yanitlanan_madde_n"] = int(coklu.notna().values.sum())
+sayilar["coklu|madde_yaniti_yuzde"] = round(sayilar["coklu|madde_yaniti_n"]
+                                            / sayilar["coklu|yanitlanan_madde_n"] * 100, 1)
+
+fark = (veri["bilgi_skoru"] - veri["bilgi_skoru_kati"]).dropna()
+sayilar["kati|bilgi_skoru_degisen_n"] = int((fark != 0).sum())
+sayilar["kati|bilgi_skoru_payda"] = int(len(fark))
+sayilar["kati|bilgi_skoru_degisen_yuzde"] = round(sayilar["kati|bilgi_skoru_degisen_n"] / len(fark) * 100, 1)
+
 # bilgi kategorileri
 kategori = frekans("bilgi_kategori", ["Low (0-4)", "Moderate (5-7)", "High (8-10)"])
 tablolar["bilgi_kategorileri"] = kategori

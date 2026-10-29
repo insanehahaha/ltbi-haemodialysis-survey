@@ -139,6 +139,26 @@ for soru in bilgi_sorulari + senaryo_sorulari:
     veri[soru + "_kati"] = ham[soru].apply(lambda h: soruyu_puanla(soru, h, kati_mi=True))
     veri[soru + "_bilmiyorum"] = ham[soru].apply(bilmiyorum_mu)
 
+
+# birden fazla seçenek işaretlenmiş mi (1 / 0)
+# D1'de TST ve IGRA kuralına giren işaretlemeler "her ikisi" sayıldığı için çoklu sayılmıyor
+
+def coklu_isaret_mi(soru, hucre):
+    secenekler = secenekleri_ayir(hucre)
+    if secenekler is None:
+        return np.nan
+    if (soru == "D1" and "TST" in secenekler and "IGRA" in secenekler
+            and "Bilmiyorum" not in secenekler and "Hiçbiri" not in secenekler):
+        return 0
+    return 1 if len(secenekler) > 1 else 0
+
+
+for soru in bilgi_sorulari + senaryo_sorulari:
+    veri[soru + "_coklu"] = ham[soru].apply(lambda h: coklu_isaret_mi(soru, h))
+
+# çok sayıda sütun eklendiği için tabloyu yeniden düzenliyoruz (pandas uyarısını önler)
+veri = veri.copy()
+
 # D5 ve D6 sorularında hangi yanlış seçeneğin işaretlendiğini de görmek istiyoruz
 # bu yüzden bu iki sorunun ham yanıtını da saklıyoruz
 # tek seçenek işaretlenmişse seçeneğin kendisi, birden fazlaysa "Multiple" yazıyoruz
